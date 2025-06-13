@@ -1,7 +1,19 @@
 const Redis = require('ioredis');
 const pidusage = require('pidusage');
 const { exec } = require('child_process');
-const config = require('../shared/config');
+const config = {
+  REDIS_CONFIG: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: process.env.REDIS_PORT || 6379,
+  },
+  CHANNELS: {
+    TOP_STATS: 'top-stats',
+    BOTTOM_STATS: 'bottom-stats'
+  },
+  DATA_RETENTION_MINUTES: 30,
+  UPDATE_INTERVAL: 3000, // 3 sec time
+  UI_PORT: 3000
+}
 
 class ProcessMonitorClient {
   constructor(clientType, clientId) {
@@ -14,7 +26,12 @@ class ProcessMonitorClient {
   async getProcessStats() {
     return new Promise((resolve, reject) => {
       // Get all running processes
-      exec('Get-Process | Select-Object Id, CPU, WorkingSet', (error, stdout) => {
+      // exec('powershell "Get-Process | Select-Object Id, CPU, WorkingSet"', (error, stdout) => {
+      //   if (error) {
+      //     reject(error);
+      //     return;
+      //   }
+           exec('ps -eo pid,pcpu,pmem --no-headers', (error, stdout) => {
         if (error) {
           reject(error);
           return;
