@@ -1,0 +1,99 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  server:
+    build: ./server
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+
+  # Top Clients (5 instances)
+  top-client-1:
+    build: ./client
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+    command: ["node", "index.js", "top", "top-client-1"]
+
+  top-client-2:
+    build: ./client
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+    command: ["node", "index.js", "top", "top-client-2"]
+
+  top-client-3:
+    build: ./client
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+    command: ["node", "index.js", "top", "top-client-3"]
+
+  top-client-4:
+    build: ./client
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+    command: ["node", "index.js", "top", "top-client-4"]
+
+  top-client-5:
+    build: ./client
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+    command: ["node", "index.js", "top", "top-client-5"]
+
+  # Bottom Clients (5 instances)
+  bottom-client-1:
+    build: ./client
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+    command: ["node", "index.js", "bottom", "bottom-client-1"]
+
+  bottom-client-2:
+    build: ./client
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+    command: ["node", "index.js", "bottom", "bottom-client-2"]
+
+  bottom-client-3:
+    build: ./client
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+    command: ["node", "index.js", "bottom", "bottom-client-3"]
+
+  bottom-client-4:
+    build: ./client
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+    command: ["node", "index.js", "bottom", "bottom-client-4"]
+
+  bottom-client-5:
+    build: ./client
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+    command: ["node", "index.js", "bottom", "bottom-client-5"]

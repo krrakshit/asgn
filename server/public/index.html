@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Process Monitor</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        select {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            background: white;
+            color: #333;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 200px;
+        }
+
+        select:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            background: rgba(255,255,255,0.2);
+            padding: 10px 20px;
+            border-radius: 50px;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected { 
+            background-color: #4CAF50; 
+            box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+        }
+
+        .status-dot.disconnected { 
+            background-color: #f44336; 
+            box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7);
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+            }
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .client-info {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            display: none;
+        }
+
+        .client-info.show {
+            display: block;
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        td {
+            padding: 20px;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            transition: background-color 0.3s ease;
+        }
+
+        tr:hover td {
+            background-color: rgba(102, 126, 234, 0.05);
+        }
+
+        .cpu-high { 
+            color: #d32f2f; 
+            font-weight: 700;
+            background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .cpu-medium { 
+            color: #f57c00; 
+            font-weight: 600;
+        }
+
+        .cpu-low { 
+            color: #388e3c; 
+            font-weight: 500;
+        }
+
+        .memory-bar {
+            width: 100px;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        .memory-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #FFC107, #FF5722);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .last-updated {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+            color: #666;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .no-data {
+            text-align: center;
+            color: #666;
+            padding: 60px 20px;
+            font-size: 1.2rem;
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 60px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #e0e0e0;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .controls {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            select {
+                width: 100%;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+
+            th, td {
+                padding: 15px 10px;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🖥️ Real-Time Process Monitor</h1>
+            <div class="controls">
+                <select id="clientSelect">
+                    <option value="">Select a client...</option>
+                </select>
+                <div class="status">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">Connecting...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="client-info" id="clientInfo">
+                <h3 id="clientTitle">Client Information</h3>
+                <p id="clientDetails">No client selected</p>
+            </div>
+
+            <div class="stats-grid" id="statsGrid" style="display: none;">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalProcesses">0</div>
+                    <div class="stat-label">Total Processes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="avgCpu">0%</div>
+                    <div class="stat-label">Average CPU</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="avgMemory">0%</div>
+                    <div class="stat-label">Average Memory</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="lastUpdate">Never</div>
+                    <div class="stat-label">Last Update</div>
+                </div>
+            </div>
+
+            <div id="dataContainer">
+                <div class="no-data">
+                    👆 Select a client from the dropdown above to view real-time process data
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const clientSelect = document.getElementById('clientSelect');
+        const dataContainer = document.getElementById('dataContainer');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const clientInfo = document.getElementById('clientInfo');
+        const clientTitle = document.getElementById('clientTitle');
+        const clientDetails = document.getElementById('clientDetails');
+        const statsGrid = document.getElementById('statsGrid');
+
+        let selectedClient = '';
+        let latestData = {};
+        let clients = [];
+
+        // Connection status
+        socket.on('connect', () => {
+            statusDot.className = 'status-dot connected';
+            statusText.textContent = 'Connected';
+            console.log('Connected to server');
+        });
+
+        socket.on('disconnect', () => {
+            statusDot.className = 'status-dot disconnected';
+            statusText.textContent = 'Disconnected';
+            console.log('Disconnected from server');
+        });
+
+        // Client list updates
+        socket.on('client-list', (clientList) => {
+            console.log('Received client list:', clientList);
+            clients = clientList;
+            updateClientSelect(clientList);
+        });
+
+        // Real-time data updates
+        socket.on('client-data', (data) => {
+            console.log('Received real-time data:', data);
+            latestData[data.clientId] = {
+                processes: data.latestData,
+                timestamp: data.timestamp,
+                clientType: data.clientType
+            };
+
+            // Update client list if new client
+            const existingClient = clients.find(c => c.clientId === data.clientId);
+            if (!existingClient) {
+                clients.push({
+                    clientId: data.clientId,
+                    clientType: data.clientType,
+                    lastSeen: data.timestamp
+                });
+                updateClientSelect(clients);
+            }
+
+            if (selectedClient === data.clientId) {
+                displayProcessData(data.latestData, data.timestamp, data.clientType);
+            }
+        });
+
+        socket.on('client-data-response', (response) => {
+            console.log('Received client data response:', response);
+            if (response.clientId === selectedClient) {
+                displayProcessData(response.data, response.timestamp, response.clientType);
+            }
+        });
+
+        function updateClientSelect(clientList) {
+            const currentValue = clientSelect.value;
+            clientSelect.innerHTML = '<option value="">Select a client...</option>';
+            
+            // Group clients by type
+            const topClients = clientList.filter(c => c.clientType === 'top').sort((a, b) => a.clientId.localeCompare(b.clientId));
+            const bottomClients = clientList.filter(c => c.clientType === 'bottom').sort((a, b) => a.clientId.localeCompare(b.clientId));
+            
+            if (topClients.length > 0) {
+                const topGroup = document.createElement('optgroup');
+                topGroup.label = '📈 Top CPU Clients';
+                topClients.forEach(client => {
+                    const option = document.createElement('option');
+                    option.value = client.clientId;
+                    option.textContent = `${client.clientId} ${client.lastSeen ? '🟢' : '🔴'}`;
+                    topGroup.appendChild(option);
+                });
+                clientSelect.appendChild(topGroup);
+            }
+            
+            if (bottomClients.length > 0) {
+                const bottomGroup = document.createElement('optgroup');
+                bottomGroup.label = '📉 Bottom CPU Clients';
+                bottomClients.forEach(client => {
+                    const option = document.createElement('option');
+                    option.value = client.clientId;
+                    option.textContent = `${client.clientId} ${client.lastSeen ? '🟢' : '🔴'}`;
+                    bottomGroup.appendChild(option);
+                });
+                clientSelect.appendChild(bottomGroup);
+            }
+            
+            // Restore selection if it still exists
+            if (currentValue && clientList.some(c => c.clientId === currentValue)) {
+                clientSelect.value = currentValue;
+            }
+        }
+
+        function displayProcessData(processes, timestamp, clientType) {
+            if (!processes || processes.length === 0) {
+                dataContainer.innerHTML = '<div class="no-data">No process data available for this client</div>';
+                statsGrid.style.display = 'none';
+                clientInfo.classList.remove('show');
+                return;
+            }
+
+            // Show client info
+            clientInfo.classList.add('show');
+            clientTitle.textContent = `${selectedClient} (${clientType?.toUpperCase() || 'UNKNOWN'} CPU Stats)`;
+            clientDetails.textContent = `Monitoring ${processes.length} processes • Type: ${clientType === 'top' ? 'Highest' : 'Lowest'} CPU usage`;
+
+            // Calculate stats
+            const totalProcesses = processes.length;
+            const avgCpu = totalProcesses > 0 ? (processes.reduce((sum, p) => sum + p.cpu, 0) / totalProcesses).toFixed(1) : 0;
+            const avgMemory = totalProcesses > 0 ? (processes.reduce((sum, p) => sum + p.memory, 0) / totalProcesses).toFixed(1) : 0;
+            const lastUpdateTime = timestamp ? new Date(timestamp).toLocaleTimeString() : 'Never';
+
+            // Update stats
+            document.getElementById('totalProcesses').textContent = totalProcesses;
+            document.getElementById('avgCpu').textContent = `${avgCpu}%`;
+            document.getElementById('avgMemory').textContent = `${avgMemory}%`;
+            document.getElementById('lastUpdate').textContent = lastUpdateTime;
+            statsGrid.style.display = 'grid';
+
+            // Create table
+            const tableContainer = document.createElement('div');
+            tableContainer.className = 'table-container';
+            
+            const table = document.createElement('table');
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>🆔 Process ID</th>
+                        <th>🔥 CPU Usage</th>
+                        <th>💾 Memory Usage</th>
+                        <th>📊 Memory Bar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${processes.map((proc, index) => `
+                        <tr style="animation: fadeIn 0.5s ease ${index * 0.1}s both;">
+                            <td><strong>${proc.pid}</strong></td>
+                            <td class="${getCpuClass(proc.cpu)}">${proc.cpu.toFixed(2)}%</td>
+                            <td>${proc.memory.toFixed(2)}%</td>
+                            <td>
+                                <div class="memory-bar">
+                                    <div class="memory-fill" style="width: ${Math.min(proc.memory * 2, 100)}%"></div>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            `;
+
+            const lastUpdated = document.createElement('div');
+            lastUpdated.className = 'last-updated';
+            lastUpdated.innerHTML = `
+                ⏰ Last updated: <strong>${new Date(timestamp).toLocaleString()}</strong> • 
+                📡 Real-time updates every 3 seconds
+            `;
+
+            tableContainer.appendChild(table);
+
+            dataContainer.innerHTML = '';
+            dataContainer.appendChild(tableContainer);
+            dataContainer.appendChild(lastUpdated);
+
+            // Add fade-in animation for rows
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes fadeIn {
+                    from {
+                        opacity: 0;
+                        transform: translateX(-20px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateX(0);
+                    }
+                }
+            `;
+            if (!document.head.querySelector('style[data-animations]')) {
+                style.setAttribute('data-animations', 'true');
+                document.head.appendChild(style);
+            }
+        }
+
+        function getCpuClass(cpu) {
+            if (cpu > 50) return 'cpu-high';
+            if (cpu > 20) return 'cpu-medium';
+            return 'cpu-low';
+        }
+
+        // Client selection handler
+        clientSelect.addEventListener('change', (e) => {
+            selectedClient = e.target.value;
+            if (selectedClient) {
+                // Show loading
+                dataContainer.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+                
+                // Show latest data if available
+                if (latestData[selectedClient]) {
+                    displayProcessData(
+                        latestData[selectedClient].processes,
+                        latestData[selectedClient].timestamp,
+                        latestData[selectedClient].clientType
+                    );
+                }
+                
+                // Request latest data from server
+                socket.emit('get-client-data', selectedClient);
+            } else {
+                dataContainer.innerHTML = '<div class="no-data">👆 Select a client from the dropdown above to view real-time process data</div>';
+                statsGrid.style.display = 'none';
+                clientInfo.classList.remove('show');
+            }
+        });
+
+        // Auto-refresh every 5 seconds if a client is selected
+        setInterval(() => {
+            if (selectedClient) {
+                socket.emit('get-client-data', selectedClient);
+            }
+        }, 5000);
+    </script>
+</body>
+</html>
